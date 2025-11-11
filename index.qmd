@@ -1,8 +1,14 @@
 ---
 title: "Simulation"
-author: "Your Name Here"
+author: "Gabe Macklem"
 format: html
 ---
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+```
+
 
 
 # Warming Up
@@ -16,7 +22,32 @@ Remember to set your seeds for these exercises so that you get the same answer e
 1. Simulate 1000 draws from the exponential distribution $$f(x) = \lambda e^{-\lambda x},\;\;\;\; x\geq0, \text{ with } \lambda=3$$
 
 
+```{r}
+set.seed(1202)
+exp_3_sim <- rexp(1000, rate = 1/3)
+
+exp_3_fn <- function(x){
+  (3)*exp(3*-x)
+}
+exp_3 <- exp_3_fn(seq(0,25,0.1))
+
+exp_3 <- dexp(seq(0,25,0.1), rate = 1/3)
+```
+
+
+
 2. Create a density plot of your values. Add the PDF of the exponential(3) distribution to your plot in a different color. How do they compare?
+
+```{r}
+ggplot() +
+  geom_density(aes(x = exp_3_sim), color = "blue") +
+  geom_density(aes(x = exp_3), color = "red")
+
+ggplot() +
+  stat_function(fun = dexp, geom = "density", args = c(rate = 1/3, x = seq(0,25)))
+
+```
+
 
 3. How might  you use your 1000 draws to estimate the probability that $x > 1$? Provide an estimate using only your 1000 draws, and compare this estimate to one derived from `pexp` (R) or `scipy.stats.expon.cdf` (Python).
 
