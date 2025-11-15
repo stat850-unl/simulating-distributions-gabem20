@@ -7,6 +7,8 @@ format: html
 ```{r}
 library(tidyverse)
 library(ggplot2)
+library(MASS)
+library(purrr)
 ```
 
 
@@ -40,19 +42,54 @@ exp_3 <- dexp(seq(0,25,0.1), rate = 1/3)
 
 ```{r}
 ggplot() +
-  geom_density(aes(x = exp_3_sim), color = "blue") +
-  geom_density(aes(x = exp_3), color = "red")
+  geom_density(aes(x = exp_3_sim), color = "blue") 
 
 ggplot() +
-  stat_function(fun = dexp, geom = "density", args = c(rate = 1/3, x = seq(0,25)))
+  geom_density(aes(x = exp_3_sim), color = "red") +
+  stat_function(fun = dexp, 
+                geom = "line",
+                args = list(rate = 1/3),
+                xlim = c(0, 15),
+                color = "blue")
 
 ```
 
 
 3. How might  you use your 1000 draws to estimate the probability that $x > 1$? Provide an estimate using only your 1000 draws, and compare this estimate to one derived from `pexp` (R) or `scipy.stats.expon.cdf` (Python).
 
+```{r}
+pexp(1, rate = 1/3, lower.tail = FALSE)
+sum(exp_3_sim > 1) / 1000
+```
+
+
 4. What is the average error from using a $n=1000$ simulation instead of a numerical calculation for the probability that $x>1$? Write a function to calculate the error from one simulation, and evaluate that function 100 times to calculate the expected error from using a simulation estimate rather than deterministic numerical integration.
 
+
+```{r}_fn <- function(n = 1000, lambda = 3, threshold = 1){
+  sim_values <- rexp(n, rate = 1/lambda)
+  sim_estimate <- sum(sim_values > threshold) / n
+  true_value <- pexp(threshold, rate = 1/lambda, lower.tail = FALSE)
+  error <- abs(true_value - sim_estimate)
+  return(error)
+}
+
+errors <- c()
+
+for (i in 1:1000){
+  
+  sim <- rexp(1000, rate = 1/3)
+  sim_p <- sum(sim > 1)/1000
+  
+  known_p <- pexp(1,rate=1/3, lower.tail = F)
+  
+  errors[i] <- (sim_p - known_p)
+  
+}
+
+mean(abs(errors))
+
+```
 
 
 
@@ -73,12 +110,118 @@ $$f(x | \alpha, \beta) = \frac{\beta^\alpha x^{\alpha-1} e^{-x}}{\Gamma(\alpha)}
 1. Write a function that will calculate the MLE $\hat\alpha,\hat\beta$ from a vector $x_{samp}$ of gamma-distributed samples. Your function should have required parameter $x$ and optional parameters $\alpha,\beta$ representing the true values. The function should return a list of $\hat\alpha, \hat\beta$ and, if $\alpha,\beta$ are provided, it should also return $\alpha_{err} = \alpha-\hat\alpha$ and $\beta_{err} = \beta-\hat\beta$. 
 
 
+```{r}
+
+gamma_est <- function(n = 1000, shape = 1, rate = 1){
+  
+  gamma_sim <- rgamma(n = n, shape = shape, rate = rate)
+  fit_gamma <- fitdistr(gamma_sim, densfun = "gamma", 
+                        start = list(shape = 0.00001, rate = 0.00001), lower = 0.0000001)
+  est_a <- fit_gamma$estimate['shape'][[1]]
+  est_b <- fit_gamma$estimate['rate'][[1]]
+  
+  results <- list(
+    # alpha = shape,
+    # beta = rate,
+    alpha_hat = est_a,
+    beta_hat = est_b,
+    alpha_err = abs(shape - est_a),
+    beta_err = abs(rate - est_b)
+  )
+  
+  return(results)
+}
+
+gamma_est()
+
+```
+
 
 
 2. For a grid of $\alpha \times \beta=\{0.25, 0.50, 1.00, 2.00, 4.00\}\times\{0.25, 0.50, 1.00, 2.00, 4.00\}$, sample 100 values from the $\text{gamma}(\alpha,\beta)$ distribution. Provide the true parameter values and plot your error values in an appropriate plot. Take care to choose your plot mappings to support your discussion of the following: What trends (if any) do you notice in the estimation error?
 
+```{r}
+ab_grid <- expand.grid(
+  alpha = c(0.25, 0.50, 1.00, 2.00, 4.00),
+  beta = c(0.25, 0.50, 1.00, 2.00, 4.00)
+)
+
+set.seed(1202)
+sim_results1 <- ab_grid %>% 
+  mutate(sim_results = pmap(.l = list(alpha = alpha, beta = beta), 
+                            .f = ~gamma_est(n= 100, shape = ..1, ..2))) %>% 
+  unnest_wider(sim_results)
+
+ggplot(data = sim_results1) +
+  geom_point(aes(x = alpha, y = alpha_err, color = beta), size = 2.75) + 
+  scale_x_continuous(limits = c(0,4), breaks = seq(0,4,0.5)) +
+  labs(
+    x = "Alpha(shape)",
+    y = "Alpha Error",
+    color = "Beta(rate)",
+    title = "Comparison of Simulated Alpha Values to Error"
+  ) +
+  theme_bw()
+
+ggplot(data = sim_results1) +
+  geom_point(aes(x = beta, y = beta_err, color = alpha), size = 2.75) +
+  scale_x_continuous(limits = c(0,4), breaks = seq(0,4,0.5)) +
+  labs(
+    x = "Beta(rate)",
+    y = "Beta Error",
+    color = "Alpha(shape)",
+    title = "Comparison of Simulated Beta Values to Error"
+  ) +
+  theme_bw() 
+
+```
+
+
+From the above plots you notice that error appears to increase for each respective parameter as they increase. It also appears that if one parameter is larger than the other, there is greater error in the simulated estimates. If the parameter values are the same, the simulated values are closer to the actual.
+
+
+
 
 3. Now, let's vary the sample size. For $n=\{20, 30, 50, 100\}$, use your function to evaluate the error for $\alpha=1, \beta=2$. How does the error change as $n$ increases? Provide an appropriate plot as well as a description of the changes for increasing $n$. 
+
+
+```{r}
+set.seed(1202)
+n_grid <- data.frame(
+  alpha = rep(1, 10),
+  beta = rep(2,10),
+  n = c(10,20,35,50,100,175,250,500,750,1000)
+) %>% 
+  mutate(
+    sim_results = pmap(.l = list(alpha = alpha, beta = beta, n = n),
+                       .f = ~gamma_est(n = ..3, shape = ..1, rate = ..2))
+  ) %>% 
+  unnest_wider(sim_results)
+
+
+ggplot(data = n_grid, aes(x = n)) +
+  geom_point(aes(y = alpha_err, color = "Alpha Error")) +
+  geom_point(aes(y = beta_err, color = "Beta Error")) +
+  labs(
+    title = "Relationship Between Estimate Error and Simulation Sample Size",
+    subtitle = "Alpha(shape) = 1, Beta(rate) = 2",
+    y = "Error",
+    x = "Sample Size"
+  ) +
+  scale_color_manual(
+    name = "Parameter",
+    values = c("Alpha Error" = "red", "Beta Error" = "blue")
+  ) +
+  theme_bw()
+  
+
+```
+
+
+
+I decided to change the values a little because I was curious.
+
+From the plot we can see that the error in our estimates exponentially decreases as sample size increases. We also notice minimal improvement in error after a sample size of 250.
 
 
 
