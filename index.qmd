@@ -4,7 +4,7 @@ author: "Gabe Macklem"
 format: html
 ---
 
-```{r}
+```{r, include=FALSE, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(ggplot2)
 library(MASS)
@@ -200,8 +200,8 @@ n_grid <- data.frame(
 
 
 ggplot(data = n_grid, aes(x = n)) +
-  geom_point(aes(y = alpha_err, color = "Alpha Error")) +
-  geom_point(aes(y = beta_err, color = "Beta Error")) +
+  geom_point(aes(y = alpha_err, color = "Alpha Error"), size = 2.75) +
+  geom_point(aes(y = beta_err, color = "Beta Error"), size = 2.75) +
   labs(
     title = "Relationship Between Estimate Error and Simulation Sample Size",
     subtitle = "Alpha(shape) = 1, Beta(rate) = 2",
